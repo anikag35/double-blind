@@ -1,0 +1,13 @@
+# Rust
+target/
+.env
+
+# Note: Cargo.lock is intentionally NOT ignored here — Double Blind is a
+# binary/service, and binaries should commit their lock file for
+# reproducible builds. (Libraries, like the rate limiter project, should
+# ignore Cargo.lock instead.)
+
+# Python stats layer
+__pycache__/
+*.pyc
+.venv/
