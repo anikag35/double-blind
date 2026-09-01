@@ -6,16 +6,26 @@ Judge scoring is blinded to both model identity and response position/order, to 
 
 ## Status
 
-Not yet started — see the build plan in `~/Desktop/portfolio-refresh/eval-platform-timeline.md`.
+Design complete — see [`design-doc.md`](./design-doc.md). Currently building Weeks 2–3 of the timeline (core scheduler) — see [`implementation-plan.md`](./implementation-plan.md) for the detailed build steps, architecture decisions, and open questions.
 
 ## Getting started
 
-1. Follow `~/Desktop/portfolio-refresh/git-setup-guide.md` to initialize this as a git repo and push it to GitHub as `double-blind`.
-2. Work through Week 1 of the timeline: design doc, architecture sketch, tech stack decision, CI skeleton.
+```
+docker compose up -d postgres     # local Postgres — the only containerized service for now
+cargo run --bin scheduler         # starts the scheduler's gRPC server
+python -m worker                  # run in one or more terminals — each is a worker process
+blind run --models --prompts tasks.jsonl   # the CLI (a gRPC client) submits a run and prints the leaderboard
+```
 
-## Planned architecture (fill in as design solidifies)
+Full setup details: `implementation-plan.md`.
 
-- Scheduler / worker pool (Rust) — task distribution, per-provider rate limiting, retry-with-backoff
-- Checkpointing / persistence (Postgres) — resumable runs, idempotent task execution
-- Eval / stats layer (Python) — confidence intervals, significance testing, judge calibration, blinded scoring
-- Deployment — multi-worker scale-out, throughput benchmarks
+## Architecture
+
+- **Scheduler** (Rust) — expands a run request into individual tasks, validates that the judge isn't among the models being evaluated, computes content-addressed task IDs, and writes tasks to the Postgres-backed queue. Exposes the gRPC service (`SubmitRun`, `GetTask`, `ReportResult`, `Heartbeat`) that both the CLI and workers talk to.
+- **Queue** (Postgres) — a `tasks` table claimed via `SELECT ... FOR UPDATE SKIP LOCKED`; a worker that misses its heartbeat for 30s has its task automatically reclaimed by the same query.
+- **Workers** (Python) — pull tasks over gRPC, call the contestant model and the judge model (OpenAI, Anthropic, Gemini, Grok), score against the rubric, report results.
+- **Storage** (Postgres) — task status for checkpointing, plus completed scores, verdicts, and per-criterion rationale.
+- **Stats layer** (Python) — bootstrap confidence intervals for rubric mode; McNemar's test for pairwise blinded-vs-unblinded comparisons.
+- **CLI** (`blind`, Rust) — a gRPC client to the scheduler; `blind run` to kick off an eval, `blind show` to view results.
+
+Full design rationale, the worked CLI walkthrough, and every resolved design decision: [`design-doc.md`](./design-doc.md).
