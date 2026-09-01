@@ -1,0 +1,5 @@
+[project]
+name = "double-blind"
+version = "0.1.0"
+description = "Double Blind: a distributed, fault-tolerant LLM evaluation platform"
+requires-python = ">=3.11"
