@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+package blind;
+
+// ---- Enums ----
+
+enum Mode {
+  MODE_UNSPECIFIED = 0; // scheduler treats this as MODE_RUBRIC (the CLI's default mode)
+  MODE_RUBRIC = 1;
+  MODE_PAIRWISE = 2;
+}
+
+// Only meaningful for pairwise tasks; rubric tasks always report CONDITION_UNSPECIFIED.
+enum Condition {
+  CONDITION_UNSPECIFIED = 0;
+  CONDITION_BLIND = 1;
+  CONDITION_UNBLIND = 2;
+}
+
+enum Verdict {
+  VERDICT_UNSPECIFIED = 0;
+  VERDICT_MODEL_A = 1;
+  VERDICT_MODEL_B = 2;
+  VERDICT_TIE = 3;
+}
+
+// ---- SubmitRun: CLI -> scheduler, starts a run ----
+
+message RunRequest {
+  repeated string models = 1;
+  string prompts_path = 2;
+  string judge = 3;       // empty = use the built-in default judge
+  string rubric_path = 4; // empty = use the built-in default rubric
+  Mode mode = 5;
+  bool compare = 6;       // pairwise only; runs both blind and unblind conditions
+}
+
+message RunHandle {
+  string run_id = 1;
+}
+
+// ---- GetTask: worker -> scheduler, pulls one task ----
+
+message WorkerId {
+  string worker_id = 1;
+}
+
+message Task {
+  bool available = 1; // false = no work pending right now; worker waits and retries
+  string task_id = 2;
+  string run_id = 3;
+  Mode mode = 4;
+  string judge = 5;
+  string rubric_path = 6;
+  string prompt = 7;      // full prompt text, for calling the model
+  string prompt_hash = 8; // matches the hash used in this task's task_id
+
+  // Rubric mode only
+  string model = 9;
+
+  // Pairwise mode only
+  string model_a = 10;
+  string model_b = 11;
+  Condition condition = 12;
+  bool model_a_shown_first = 13; // derived from task_id, per the design doc's PRNG rule
+}
+
+// ---- ReportResult: worker -> scheduler, finished task outcome ----
+
+message CriterionScore {
+  string name = 1;
+  int32 score = 2;
+  string rationale = 3;
+}
+
+message RubricResult {
+  double composite_score = 1;
+  repeated CriterionScore criteria = 2;
+}
+
+message PairwiseResult {
+  Verdict verdict = 1;
+  string rationale = 2;
+}
+
+message TaskResult {
+  string task_id = 1;
+  oneof outcome {
+    RubricResult rubric = 2;
+    PairwiseResult pairwise = 3;
+  }
+}
+
+message Empty {}
+
+// ---- Heartbeat: worker -> scheduler, keep-alive while a task is in progress ----
+
+message HeartbeatRequest {
+  string task_id = 1;
+  string worker_id = 2;
+}
+
+// ---- GetRun: CLI -> scheduler, what `blind show` calls ----
+
+message RunId {
+  string run_id = 1;
+}
+
+message LeaderboardEntry {
+  int32 rank = 1;
+  string model = 2;
+  double mean_score = 3;
+  double ci_low = 4;
+  double ci_high = 5;
+}
+
+message Leaderboard {
+  string run_id = 1;
+  repeated LeaderboardEntry entries = 2;
+}
+
+// ---- Service ----
+
+service Scheduler {
+  rpc SubmitRun(RunRequest) returns (RunHandle);
+  rpc GetTask(WorkerId) returns (Task);
+  rpc ReportResult(TaskResult) returns (Empty);
+  rpc Heartbeat(HeartbeatRequest) returns (Empty);
+  rpc GetRun(RunId) returns (Leaderboard);
+}
