@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+hex = "0.4.3"
 prost = "0.14.4"
+rand = "0.10.2"
+sha2 = "0.11.0"
 sqlx = { version = "0.9.0", features = ["runtime-tokio", "tls-rustls", "postgres", "chrono", "json"] }
 tokio = { version = "1.53.1", features = ["full"] }
 tonic = "0.14.6"

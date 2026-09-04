@@ -1,3 +1,4 @@
+mod ids;
 mod pb {
     tonic::include_proto!("blind");
 }
