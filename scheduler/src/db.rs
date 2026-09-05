@@ -66,3 +66,43 @@ pub async fn insert_run(
         return Ok(run_id);
     }
 }
+
+#[derive(sqlx::FromRow)]
+pub struct ClaimedTask {
+    pub task_id: String,
+    pub run_id: String,
+    pub payload: serde_json::Value,
+    pub mode: String,
+    pub judge: String,
+    pub rubric_path: String,
+}
+
+/// Atomically claims one task: a fresh `pending` task, or a `claimed` one
+/// whose worker went silent (no heartbeat in the last 30 seconds)
+pub async fn claim_task(
+    pool: &PgPool,
+    worker_id: &str,
+) -> Result<Option<ClaimedTask>, sqlx::Error> {
+    sqlx::query_as::<_, ClaimedTask>(
+        "WITH claimed AS ( \
+            UPDATE tasks \
+            SET status = 'claimed', claimed_by = $1, last_heartbeat = now() \
+            WHERE task_id = ( \
+                SELECT task_id FROM tasks \
+                WHERE status = 'pending' \
+                   OR (status = 'claimed' AND last_heartbeat < now() - interval '30 seconds') \
+                ORDER BY created_at \
+                FOR UPDATE SKIP LOCKED \
+                LIMIT 1 \
+            ) \
+            RETURNING task_id, run_id, payload \
+        ) \
+        SELECT claimed.task_id, claimed.run_id, claimed.payload, \
+               runs.mode, runs.judge, runs.rubric_path \
+        FROM claimed \
+        JOIN runs ON runs.run_id = claimed.run_id",
+    )
+    .bind(worker_id)
+    .fetch_optional(pool)
+    .await
+}
