@@ -8,6 +8,8 @@ mod submit_run_tests;
 mod submit_run_tests_pairwise;
 #[cfg(test)]
 mod submit_run_tests_rubric;
+#[cfg(test)]
+mod submit_run_tests_validation;
 mod validate;
 mod pb {
     tonic::include_proto!("blind");
