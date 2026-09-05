@@ -4,6 +4,8 @@ mod files;
 mod ids;
 #[cfg(test)]
 mod submit_run_tests;
+#[cfg(test)]
+mod submit_run_tests_rubric;
 mod validate;
 mod pb {
     tonic::include_proto!("blind");
