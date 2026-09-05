@@ -1,0 +1,17 @@
+# Built-in default rubric, used when --rubric is omitted and no ./rubric.yaml
+# exists
+scale: 1-5
+
+criteria:
+  - name: correctness
+    description: Is the response factually and technically accurate?
+    weight: 1
+  - name: completeness
+    description: Does the response fully address the prompt, without leaving out important parts?
+    weight: 1
+  - name: clarity
+    description: Is the response clearly organized and easy to follow?
+    weight: 1
+  - name: instruction_following
+    description: Does the response follow the specific instructions and constraints given in the prompt?
+    weight: 1

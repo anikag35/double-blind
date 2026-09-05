@@ -32,6 +32,17 @@ pub fn rubric_task_id(run_id: &str, model: &str, prompt_hash: &str, judge: &str,
 
 /// `model_a`/`model_b` are sorted before hashing so the task_id doesn't
 /// depend on which model happened to be listed first.
+/// Orders a model pair consistently, independent of caller-supplied order.
+/// Used both for hashing (`pairwise_task_id`) and for building task payloads,
+/// so `model_a`/`model_b` in a stored payload always match what was hashed.
+pub fn sort_pair<'a>(model_a: &'a str, model_b: &'a str) -> (&'a str, &'a str) {
+    if model_a <= model_b {
+        (model_a, model_b)
+    } else {
+        (model_b, model_a)
+    }
+}
+
 pub fn pairwise_task_id(
     run_id: &str,
     model_a: &str,
@@ -40,11 +51,7 @@ pub fn pairwise_task_id(
     judge: &str,
     condition: &str,
 ) -> String {
-    let (a, b) = if model_a <= model_b {
-        (model_a, model_b)
-    } else {
-        (model_b, model_a)
-    };
+    let (a, b) = sort_pair(model_a, model_b);
     hash_fields(&["pairwise", run_id, a, b, prompt_hash, judge, condition])
 }
 
