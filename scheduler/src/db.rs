@@ -10,6 +10,7 @@ pub struct NewRun<'a> {
     pub models: &'a [String],
     pub prompts_path: &'a str,
     pub judge: &'a str,
+    pub rubric_path: &'a str,
     pub rubric_hash: &'a str,
     pub mode: &'a str, // "rubric" | "pairwise"
     pub compare: bool,
@@ -28,13 +29,14 @@ pub async fn insert_run(
         let mut tx = pool.begin().await?;
 
         let insert_result = sqlx::query(
-            "INSERT INTO runs (run_id, models, prompts_path, judge, rubric_hash, mode, compare, status) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')",
+            "INSERT INTO runs (run_id, models, prompts_path, judge, rubric_path, rubric_hash, mode, compare, status) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')",
         )
         .bind(&run_id)
         .bind(serde_json::json!(run.models))
         .bind(run.prompts_path)
         .bind(run.judge)
+        .bind(run.rubric_path)
         .bind(run.rubric_hash)
         .bind(run.mode)
         .bind(run.compare)

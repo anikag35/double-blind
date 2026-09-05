@@ -28,8 +28,9 @@ use tonic::{transport::Server, Request, Response, Status};
 /// Used when --judge is omitted
 const DEFAULT_JUDGE: &str = "claude-opus";
 
-/// Used when --rubric is omitted and no ./rubric.yaml exists
-const DEFAULT_RUBRIC: &str = include_str!("../default_rubric.yaml");
+/// Used when --rubric is omitted. 
+// This is a real file so the worker has an actual path to read criteria from
+const DEFAULT_RUBRIC_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/default_rubric.yaml");
 
 struct SchedulerService {
     pool: PgPool,
@@ -71,16 +72,14 @@ impl Scheduler for SchedulerService {
         })?;
         let prompts = files::parse_prompts(&prompts_content).map_err(Status::invalid_argument)?;
 
-        let rubric_content = if req.rubric_path.is_empty() {
-            DEFAULT_RUBRIC.to_string()
+        let rubric_path = if req.rubric_path.is_empty() {
+            DEFAULT_RUBRIC_PATH
         } else {
-            fs::read_to_string(&req.rubric_path).map_err(|e| {
-                Status::invalid_argument(format!(
-                    "failed to read rubric_path {}: {e}",
-                    req.rubric_path
-                ))
-            })?
+            &req.rubric_path
         };
+        let rubric_content = fs::read_to_string(rubric_path).map_err(|e| {
+            Status::invalid_argument(format!("failed to read rubric_path {rubric_path}: {e}"))
+        })?;
         // Validated for well-formedness now so a bad rubric fails fast at
         // submit time, rather than surfacing much later on a worker
         files::parse_rubric(&rubric_content).map_err(Status::invalid_argument)?;
@@ -90,6 +89,7 @@ impl Scheduler for SchedulerService {
             models: &req.models,
             prompts_path: &req.prompts_path,
             judge: &judge,
+            rubric_path,
             rubric_hash: &rubric_hash,
             mode: mode_str,
             compare: req.compare,

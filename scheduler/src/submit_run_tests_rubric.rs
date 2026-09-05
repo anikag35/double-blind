@@ -58,14 +58,16 @@ async fn submit_run_defaults_to_rubric_mode_and_default_judge_when_unspecified()
 
     let run_id = response.into_inner().run_id;
 
-    let (mode, judge): (String, String) =
-        sqlx::query_as("SELECT mode, judge FROM runs WHERE run_id = $1")
+    let (mode, judge, rubric_path): (String, String, String) =
+        sqlx::query_as("SELECT mode, judge, rubric_path FROM runs WHERE run_id = $1")
             .bind(&run_id)
             .fetch_one(&pool)
             .await
             .expect("fetch run row");
     assert_eq!(mode, "rubric");
     assert_eq!(judge, "claude-opus");
+    assert!(rubric_path.ends_with("default_rubric.yaml"));
+    assert!(std::fs::metadata(&rubric_path).is_ok(), "rubric_path should exist on disk: {rubric_path}");
 
     cleanup_run(&pool, &run_id).await;
     std::fs::remove_file(prompts_path).ok();
