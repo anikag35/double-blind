@@ -2,6 +2,8 @@ mod db;
 mod expand;
 mod files;
 mod ids;
+#[cfg(test)]
+mod submit_run_tests;
 mod validate;
 mod pb {
     tonic::include_proto!("blind");
