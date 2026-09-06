@@ -119,8 +119,25 @@ impl Scheduler for SchedulerService {
         Ok(Response::new(RunHandle { run_id }))
     }
 
-    async fn get_task(&self, _request: Request<WorkerId>) -> Result<Response<Task>, Status> {
-        Err(Status::unimplemented("GetTask not yet implemented"))
+    async fn get_task(&self, request: Request<WorkerId>) -> Result<Response<Task>, Status> {
+        let worker_id = request.into_inner().worker_id;
+        if worker_id.is_empty() {
+            return Err(Status::invalid_argument("worker_id is empty"));
+        }
+
+        let claimed = db::claim_task(&self.pool, &worker_id)
+            .await
+            .map_err(|e| Status::internal(format!("failed to claim task: {e}")))?;
+
+        let task = match claimed {
+            Some(claimed) => task_message::build_task(claimed).map_err(Status::internal)?,
+            None => Task {
+                available: false,
+                ..Default::default()
+            },
+        };
+
+        Ok(Response::new(task))
     }
 
     async fn report_result(
