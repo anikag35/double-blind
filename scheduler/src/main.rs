@@ -10,6 +10,7 @@ mod submit_run_tests_pairwise;
 mod submit_run_tests_rubric;
 #[cfg(test)]
 mod submit_run_tests_validation;
+mod task_message;
 mod validate;
 mod pb {
     tonic::include_proto!("blind");
