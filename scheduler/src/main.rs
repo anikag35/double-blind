@@ -1,6 +1,8 @@
 mod db;
 mod expand;
 mod files;
+#[cfg(test)]
+mod get_task_tests;
 mod ids;
 #[cfg(test)]
 mod submit_run_tests;
