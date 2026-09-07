@@ -3,6 +3,8 @@ mod expand;
 mod files;
 #[cfg(test)]
 mod get_task_tests;
+#[cfg(test)]
+mod get_task_tests_pairwise;
 mod ids;
 #[cfg(test)]
 mod submit_run_tests;
