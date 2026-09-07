@@ -17,6 +17,8 @@ mod submit_run_tests_pairwise;
 mod submit_run_tests_rubric;
 #[cfg(test)]
 mod submit_run_tests_validation;
+#[cfg(test)]
+mod report_result_tests_rubric;
 mod task_message;
 mod validate;
 mod pb {
@@ -149,9 +151,24 @@ impl Scheduler for SchedulerService {
 
     async fn report_result(
         &self,
-        _request: Request<TaskResult>,
+        request: Request<TaskResult>,
     ) -> Result<Response<Empty>, Status> {
-        Err(Status::unimplemented("ReportResult not yet implemented"))
+        let req = request.into_inner();
+        if req.task_id.is_empty() {
+            return Err(Status::invalid_argument("task_id is empty"));
+        }
+
+        db::report_result(&self.pool, &req.task_id, req.outcome)
+            .await
+            .map_err(|e| match e {
+                db::ReportError::TaskNotFound => {
+                    Status::not_found(format!("no such task: {}", req.task_id))
+                }
+                db::ReportError::InvalidRequest(msg) => Status::invalid_argument(msg),
+                db::ReportError::Db(e) => Status::internal(format!("failed to report result: {e}")),
+            })?;
+
+        Ok(Response::new(Empty {}))
     }
 
     async fn heartbeat(

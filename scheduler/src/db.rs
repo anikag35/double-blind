@@ -129,7 +129,10 @@ pub async fn report_result(
 ) -> Result<(), ReportError> {
     let mut tx = pool.begin().await?;
 
-    let mode: Option<String> = sqlx::query_scalar("SELECT mode FROM tasks WHERE task_id = $1 FOR UPDATE")
+    let mode: Option<String> = sqlx::query_scalar(
+        "SELECT runs.mode FROM tasks JOIN runs ON runs.run_id = tasks.run_id \
+         WHERE tasks.task_id = $1 FOR UPDATE OF tasks",
+    )
         .bind(task_id)
         .fetch_optional(&mut *tx)
         .await?;
