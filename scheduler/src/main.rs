@@ -8,6 +8,7 @@ mod get_task_tests_concurrency;
 #[cfg(test)]
 mod get_task_tests_pairwise;
 mod ids;
+mod report;
 #[cfg(test)]
 mod submit_run_tests;
 #[cfg(test)]
