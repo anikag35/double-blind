@@ -1,8 +1,11 @@
 use crate::pb::{Mode, RunRequest};
-use crate::submit_run_tests::{cleanup_run, spawn_client, test_pool, write_temp_file};
+use crate::submit_run_tests::{
+    cleanup_run, spawn_client, test_pool, write_temp_file, TASK_QUEUE_TEST_LOCK,
+};
 
 #[tokio::test]
 async fn get_task_claims_a_rubric_task_then_reports_none_available() {
+    let _guard = TASK_QUEUE_TEST_LOCK.lock().await;
     let pool = test_pool().await;
     let mut client = spawn_client(pool.clone()).await;
 

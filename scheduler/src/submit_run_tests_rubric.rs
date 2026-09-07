@@ -1,8 +1,11 @@
 use crate::pb::{Mode, RunRequest};
-use crate::submit_run_tests::{cleanup_run, spawn_client, test_pool, write_temp_file};
+use crate::submit_run_tests::{
+    cleanup_run, spawn_client, test_pool, write_temp_file, TASK_QUEUE_TEST_LOCK,
+};
 
 #[tokio::test]
 async fn submit_run_rubric_mode_creates_one_task_per_model_times_prompt() {
+    let _guard = TASK_QUEUE_TEST_LOCK.lock().await;
     let pool = test_pool().await;
     let mut client = spawn_client(pool.clone()).await;
 
@@ -39,6 +42,7 @@ async fn submit_run_rubric_mode_creates_one_task_per_model_times_prompt() {
 
 #[tokio::test]
 async fn submit_run_defaults_to_rubric_mode_and_default_judge_when_unspecified() {
+    let _guard = TASK_QUEUE_TEST_LOCK.lock().await;
     let pool = test_pool().await;
     let mut client = spawn_client(pool.clone()).await;
 

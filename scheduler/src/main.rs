@@ -4,6 +4,8 @@ mod files;
 #[cfg(test)]
 mod get_task_tests;
 #[cfg(test)]
+mod get_task_tests_concurrency;
+#[cfg(test)]
 mod get_task_tests_pairwise;
 mod ids;
 #[cfg(test)]

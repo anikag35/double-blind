@@ -1,8 +1,11 @@
 use crate::pb::{Mode, RunRequest};
-use crate::submit_run_tests::{cleanup_run, spawn_client, test_pool, write_temp_file};
+use crate::submit_run_tests::{
+    cleanup_run, spawn_client, test_pool, write_temp_file, TASK_QUEUE_TEST_LOCK,
+};
 
 #[tokio::test]
 async fn submit_run_pairwise_without_compare_is_blind_only() {
+    let _guard = TASK_QUEUE_TEST_LOCK.lock().await;
     let pool = test_pool().await;
     let mut client = spawn_client(pool.clone()).await;
 
@@ -46,6 +49,7 @@ async fn submit_run_pairwise_without_compare_is_blind_only() {
 
 #[tokio::test]
 async fn submit_run_pairwise_with_compare_runs_both_conditions() {
+    let _guard = TASK_QUEUE_TEST_LOCK.lock().await;
     let pool = test_pool().await;
     let mut client = spawn_client(pool.clone()).await;
 

@@ -1,8 +1,11 @@
 use crate::pb::{Condition, Mode, RunRequest, WorkerId};
-use crate::submit_run_tests::{cleanup_run, spawn_client, test_pool, write_temp_file};
+use crate::submit_run_tests::{
+    cleanup_run, spawn_client, test_pool, write_temp_file, TASK_QUEUE_TEST_LOCK,
+};
 
 #[tokio::test]
 async fn get_task_claims_both_pairwise_conditions_with_correct_fields() {
+    let _guard = TASK_QUEUE_TEST_LOCK.lock().await;
     let pool = test_pool().await;
     let mut client = spawn_client(pool.clone()).await;
 

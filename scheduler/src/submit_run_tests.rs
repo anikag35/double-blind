@@ -10,6 +10,9 @@ use tokio::net::TcpListener as TokioTcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 
+/// Any test that inserts into or claims from the shared tasks table must hold this lock for its whole body, since GetTask's claim query has no run_id scoping and parallel tests would otherwise steal each other's tasks.
+pub static TASK_QUEUE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 pub async fn test_pool() -> PgPool {
     dotenvy::dotenv().ok();
     let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
