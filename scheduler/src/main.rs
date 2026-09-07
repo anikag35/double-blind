@@ -21,6 +21,8 @@ mod submit_run_tests_validation;
 mod report_result_tests_rubric;
 #[cfg(test)]
 mod report_result_tests_pairwise;
+#[cfg(test)]
+mod report_result_tests_validation;
 mod task_message;
 mod validate;
 mod pb {
