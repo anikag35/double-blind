@@ -1,5 +1,7 @@
 use crate::expand::TaskRow;
 use crate::ids::generate_run_id;
+use crate::report::{validate_and_extract, StoredResult};
+use crate::pb::task_result::Outcome;
 use sqlx::PgPool;
 
 pub async fn connect(database_url: &str) -> Result<PgPool, sqlx::Error> {
@@ -105,4 +107,66 @@ pub async fn claim_task(
     .bind(worker_id)
     .fetch_optional(pool)
     .await
+}
+
+pub enum ReportError {
+    TaskNotFound,
+    InvalidRequest(String),
+    Db(sqlx::Error),
+}
+
+impl From<sqlx::Error> for ReportError {
+    fn from(e: sqlx::Error) -> Self {
+        ReportError::Db(e)
+    }
+}
+
+/// Stores a task's result and marks it done in one transaction. Locking the task row here means a concurrent claim query's SKIP LOCKED will skip this task rather than reassigning it mid-report.
+pub async fn report_result(
+    pool: &PgPool,
+    task_id: &str,
+    outcome: Option<Outcome>,
+) -> Result<(), ReportError> {
+    let mut tx = pool.begin().await?;
+
+    let mode: Option<String> = sqlx::query_scalar("SELECT mode FROM tasks WHERE task_id = $1 FOR UPDATE")
+        .bind(task_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+    let mode = mode.ok_or(ReportError::TaskNotFound)?;
+
+    let stored = validate_and_extract(&mode, outcome).map_err(ReportError::InvalidRequest)?;
+
+    match stored {
+        StoredResult::Rubric { composite_score, criteria } => {
+            sqlx::query(
+                "INSERT INTO rubric_results (task_id, composite_score, criteria) VALUES ($1, $2, $3) \
+                 ON CONFLICT (task_id) DO NOTHING",
+            )
+            .bind(task_id)
+            .bind(composite_score)
+            .bind(criteria)
+            .execute(&mut *tx)
+            .await?;
+        }
+        StoredResult::Pairwise { verdict, rationale } => {
+            sqlx::query(
+                "INSERT INTO pairwise_results (task_id, verdict, rationale) VALUES ($1, $2, $3) \
+                 ON CONFLICT (task_id) DO NOTHING",
+            )
+            .bind(task_id)
+            .bind(verdict)
+            .bind(rationale)
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
+
+    sqlx::query("UPDATE tasks SET status = 'done' WHERE task_id = $1")
+        .bind(task_id)
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
+    Ok(())
 }
