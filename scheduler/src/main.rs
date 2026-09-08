@@ -177,9 +177,25 @@ impl Scheduler for SchedulerService {
 
     async fn heartbeat(
         &self,
-        _request: Request<HeartbeatRequest>,
+        request: Request<HeartbeatRequest>,
     ) -> Result<Response<Empty>, Status> {
-        Err(Status::unimplemented("Heartbeat not yet implemented"))
+        let req = request.into_inner();
+        if req.task_id.is_empty() || req.worker_id.is_empty() {
+            return Err(Status::invalid_argument("task_id and worker_id are required"));
+        }
+
+        let updated = db::update_heartbeat(&self.pool, &req.task_id, &req.worker_id)
+            .await
+            .map_err(|e| Status::internal(format!("failed to update heartbeat: {e}")))?;
+
+        if !updated {
+            return Err(Status::not_found(format!(
+                "task {} is not currently claimed by worker {}",
+                req.task_id, req.worker_id
+            )));
+        }
+
+        Ok(Response::new(Empty {}))
     }
 
     async fn get_run(&self, _request: Request<RunId>) -> Result<Response<Leaderboard>, Status> {

@@ -173,3 +173,17 @@ pub async fn report_result(
     tx.commit().await?;
     Ok(())
 }
+
+/// Bumps last_heartbeat, only if the task is still claimed by this worker. Returns false if the task doesn't exist, was reclaimed by someone else, or is already done.
+pub async fn update_heartbeat(pool: &PgPool, task_id: &str, worker_id: &str) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE tasks SET last_heartbeat = now() \
+         WHERE task_id = $1 AND claimed_by = $2 AND status = 'claimed'",
+    )
+    .bind(task_id)
+    .bind(worker_id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected() == 1)
+}
