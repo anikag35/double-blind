@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+chrono = "0.4.45"
 dotenvy = "0.15.7"
 hex = "0.4.3"
 prost = "0.14.4"

@@ -23,6 +23,8 @@ mod report_result_tests_rubric;
 mod report_result_tests_pairwise;
 #[cfg(test)]
 mod report_result_tests_validation;
+#[cfg(test)]
+mod heartbeat_tests;
 mod task_message;
 mod validate;
 mod pb {
