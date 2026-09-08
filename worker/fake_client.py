@@ -14,13 +14,13 @@ def _stable_score(seed: str, low: int, high: int) -> int:
 class FakeClient:
     """Deterministic, no-network stand-in for a real model/judge client. Same input always produces the same output, so tests are reproducible."""
 
-    def generate(self, prompt: str) -> str:
-        return f"[fake response to: {prompt}]"
+    def generate(self, model: str, prompt: str) -> str:
+        return f"[fake response from {model} to: {prompt}]"
 
-    def judge_rubric(self, prompt: str, response: str, rubric: Rubric) -> dict[str, CriterionResult]:
+    def judge_rubric(self, model: str, prompt: str, response: str, rubric: Rubric) -> dict[str, CriterionResult]:
         results = {}
         for criterion in rubric.criteria:
-            seed = f"{prompt}|{response}|{criterion.name}"
+            seed = f"{model}|{prompt}|{response}|{criterion.name}"
             score = _stable_score(seed, 1, 5)
             results[criterion.name] = CriterionResult(
                 score=score,
@@ -28,8 +28,20 @@ class FakeClient:
             )
         return results
 
-    def judge_pairwise(self, prompt: str, response_a: str, response_b: str) -> PairwiseVerdict:
-        seed = f"{prompt}|{response_a}|{response_b}"
-        pick = _stable_score(seed, 0, 2)  # 0 -> a, 1 -> b, 2 -> tie
-        winner = ("a", "b", "tie")[pick]
+    def judge_pairwise(
+        self,
+        model: str,
+        prompt: str,
+        response_first: str,
+        response_second: str,
+        identity_first: str | None = None,
+        identity_second: str | None = None,
+    ) -> PairwiseVerdict:
+        # Identity only folds into the seed when unblinding, so a blind and
+        # an unblind call over the same responses CAN produce different
+        # verdicts here - exactly the shift the real bias-calibration
+        # measurement depends on being possible.
+        seed = f"{model}|{prompt}|{response_first}|{response_second}|{identity_first}|{identity_second}"
+        pick = _stable_score(seed, 0, 2)  # 0 -> first, 1 -> second, 2 -> tie
+        winner = ("first", "second", "tie")[pick]
         return PairwiseVerdict(winner=winner, rationale=f"[fake pairwise rationale: {winner}]")
