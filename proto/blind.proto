@@ -110,13 +110,13 @@ message LeaderboardEntry {
   int32 rank = 1;
   string model = 2;
   double mean_score = 3;
-  double ci_low = 4;
-  double ci_high = 5;
 }
 
 message Leaderboard {
   string run_id = 1;
   repeated LeaderboardEntry entries = 2;
+  // False while any task is still pending/claimed for this run.
+  bool all_tasks_done = 3;
 }
 
 // ---- Service ----

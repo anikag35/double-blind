@@ -25,6 +25,8 @@ mod report_result_tests_pairwise;
 mod report_result_tests_validation;
 #[cfg(test)]
 mod heartbeat_tests;
+#[cfg(test)]
+mod get_run_tests;
 mod task_message;
 mod validate;
 mod pb {
@@ -35,8 +37,8 @@ use std::fs;
 
 use pb::scheduler_server::{Scheduler, SchedulerServer};
 use pb::{
-    Empty, HeartbeatRequest, Leaderboard, Mode, RunHandle, RunId, RunRequest, Task, TaskResult,
-    WorkerId,
+    Empty, HeartbeatRequest, Leaderboard, LeaderboardEntry, Mode, RunHandle, RunId, RunRequest,
+    Task, TaskResult, WorkerId,
 };
 use sqlx::PgPool;
 use tonic::{transport::Server, Request, Response, Status};
@@ -200,8 +202,33 @@ impl Scheduler for SchedulerService {
         Ok(Response::new(Empty {}))
     }
 
-    async fn get_run(&self, _request: Request<RunId>) -> Result<Response<Leaderboard>, Status> {
-        Err(Status::unimplemented("GetRun not yet implemented"))
+    async fn get_run(&self, request: Request<RunId>) -> Result<Response<Leaderboard>, Status> {
+        let run_id = request.into_inner().run_id;
+        if run_id.is_empty() {
+            return Err(Status::invalid_argument("run_id is empty"));
+        }
+
+        let result = db::get_run_leaderboard(&self.pool, &run_id)
+            .await
+            .map_err(|e| Status::internal(format!("failed to compute leaderboard: {e}")))?
+            .ok_or_else(|| Status::not_found(format!("no such run: {run_id}")))?;
+
+        let entries = result
+            .entries
+            .into_iter()
+            .enumerate()
+            .map(|(i, (model, mean_score))| LeaderboardEntry {
+                rank: (i + 1) as i32,
+                model,
+                mean_score,
+            })
+            .collect();
+
+        Ok(Response::new(Leaderboard {
+            run_id,
+            entries,
+            all_tasks_done: result.all_tasks_done,
+        }))
     }
 }
 

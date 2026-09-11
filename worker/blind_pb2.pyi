@@ -149,23 +149,21 @@ class RunId(_message.Message):
     def __init__(self, run_id: _Optional[str] = ...) -> None: ...
 
 class LeaderboardEntry(_message.Message):
-    __slots__ = ("rank", "model", "mean_score", "ci_low", "ci_high")
+    __slots__ = ("rank", "model", "mean_score")
     RANK_FIELD_NUMBER: _ClassVar[int]
     MODEL_FIELD_NUMBER: _ClassVar[int]
     MEAN_SCORE_FIELD_NUMBER: _ClassVar[int]
-    CI_LOW_FIELD_NUMBER: _ClassVar[int]
-    CI_HIGH_FIELD_NUMBER: _ClassVar[int]
     rank: int
     model: str
     mean_score: float
-    ci_low: float
-    ci_high: float
-    def __init__(self, rank: _Optional[int] = ..., model: _Optional[str] = ..., mean_score: _Optional[float] = ..., ci_low: _Optional[float] = ..., ci_high: _Optional[float] = ...) -> None: ...
+    def __init__(self, rank: _Optional[int] = ..., model: _Optional[str] = ..., mean_score: _Optional[float] = ...) -> None: ...
 
 class Leaderboard(_message.Message):
-    __slots__ = ("run_id", "entries")
+    __slots__ = ("run_id", "entries", "all_tasks_done")
     RUN_ID_FIELD_NUMBER: _ClassVar[int]
     ENTRIES_FIELD_NUMBER: _ClassVar[int]
+    ALL_TASKS_DONE_FIELD_NUMBER: _ClassVar[int]
     run_id: str
     entries: _containers.RepeatedCompositeFieldContainer[LeaderboardEntry]
-    def __init__(self, run_id: _Optional[str] = ..., entries: _Optional[_Iterable[_Union[LeaderboardEntry, _Mapping]]] = ...) -> None: ...
+    all_tasks_done: bool
+    def __init__(self, run_id: _Optional[str] = ..., entries: _Optional[_Iterable[_Union[LeaderboardEntry, _Mapping]]] = ..., all_tasks_done: _Optional[bool] = ...) -> None: ...

@@ -187,3 +187,58 @@ pub async fn update_heartbeat(pool: &PgPool, task_id: &str, worker_id: &str) -> 
 
     Ok(result.rows_affected() == 1)
 }
+
+pub struct LeaderboardResult {
+    pub all_tasks_done: bool,
+    /// (model, mean composite_score), ordered highest first. Empty until all_tasks_done is true.
+    pub entries: Vec<(String, f64)>,
+}
+
+/// Returns None if run_id doesn't exist. Lazily flips runs.status to 'done' the first time every task for the run is found done. Entries only computed once done - reading rubric_results, so a pairwise-mode run's entries stay empty (pairwise leaderboard support isn't built yet).
+pub async fn get_run_leaderboard(
+    pool: &PgPool,
+    run_id: &str,
+) -> Result<Option<LeaderboardResult>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    let run_exists: Option<String> = sqlx::query_scalar("SELECT run_id FROM runs WHERE run_id = $1")
+        .bind(run_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+    if run_exists.is_none() {
+        return Ok(None);
+    }
+
+    let not_done_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM tasks WHERE run_id = $1 AND status != 'done'")
+            .bind(run_id)
+            .fetch_one(&mut *tx)
+            .await?;
+    let all_tasks_done = not_done_count == 0;
+
+    if all_tasks_done {
+        sqlx::query("UPDATE runs SET status = 'done' WHERE run_id = $1 AND status != 'done'")
+            .bind(run_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    let entries: Vec<(String, f64)> = if all_tasks_done {
+        sqlx::query_as(
+            "SELECT tasks.payload->>'model' AS model, AVG(rubric_results.composite_score) AS mean_score \
+             FROM tasks JOIN rubric_results ON rubric_results.task_id = tasks.task_id \
+             WHERE tasks.run_id = $1 \
+             GROUP BY tasks.payload->>'model' \
+             ORDER BY mean_score DESC",
+        )
+        .bind(run_id)
+        .fetch_all(&mut *tx)
+        .await?
+    } else {
+        vec![]
+    };
+
+    tx.commit().await?;
+
+    Ok(Some(LeaderboardResult { all_tasks_done, entries }))
+}
