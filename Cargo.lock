@@ -177,6 +177,13 @@ name = "blind"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "prost",
+ "serde",
+ "serde_norway",
+ "tokio",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]

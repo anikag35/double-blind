@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Resolves a user-supplied path to an absolute one, relative to the CLI's own cwd
 //  The scheduler processes' may differ b/c it runs as a separate long-lived process
@@ -26,6 +26,7 @@ pub fn resolve_rubric_arg(rubric_arg: &str) -> std::io::Result<String> {
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::PathBuf;
     use std::sync::Mutex;
 
     // set_current_dir changes process-wide state
