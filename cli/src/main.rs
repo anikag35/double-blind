@@ -1,3 +1,5 @@
+mod paths;
+
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug)]
