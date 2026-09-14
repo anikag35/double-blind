@@ -16,6 +16,10 @@ def scheduler_address() -> str:
     return os.environ.get("SCHEDULER_ADDRESS", DEFAULT_SCHEDULER_ADDRESS)
 
 
+def heartbeat_interval_seconds() -> float:
+    return float(os.environ.get("HEARTBEAT_INTERVAL_SECONDS", HEARTBEAT_INTERVAL_SECONDS))
+
+
 def run_worker(
     stub,
     client: Client,

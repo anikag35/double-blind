@@ -21,6 +21,14 @@ pub async fn test_pool() -> PgPool {
 
 /// Boots a real scheduler server on a short local port and returns a connected client to it
 pub async fn spawn_client(pool: PgPool) -> SchedulerClient<tonic::transport::Channel> {
+    spawn_client_with_timeout(pool, 30.0).await
+}
+
+/// Used by tests that need to actually wait past it, so they don't have to wait 30+ real seconds
+pub async fn spawn_client_with_timeout(
+    pool: PgPool,
+    reassignment_timeout_seconds: f64,
+) -> SchedulerClient<tonic::transport::Channel> {
     let listener = StdTcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
     listener.set_nonblocking(true).expect("set_nonblocking");
     let addr = listener.local_addr().expect("local_addr");
@@ -28,7 +36,7 @@ pub async fn spawn_client(pool: PgPool) -> SchedulerClient<tonic::transport::Cha
         TokioTcpListener::from_std(listener).expect("tokio TcpListener::from_std"),
     );
 
-    let service = SchedulerService { pool };
+    let service = SchedulerService { pool, reassignment_timeout_seconds };
     tokio::spawn(async move {
         Server::builder()
             .add_service(SchedulerServer::new(service))

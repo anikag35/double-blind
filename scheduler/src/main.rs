@@ -46,12 +46,17 @@ use tonic::{transport::Server, Request, Response, Status};
 /// Used when --judge is omitted
 const DEFAULT_JUDGE: &str = "claude-opus";
 
-/// Used when --rubric is omitted. 
+/// Used when --rubric is omitted.
 // This is a real file so the worker has an actual path to read criteria from
 const DEFAULT_RUBRIC_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/default_rubric.yaml");
 
+/// A task claimed by a worker whose last heartbeat is older than this is
+/// treated as abandoned and becomes reclaimable. 
+const DEFAULT_REASSIGNMENT_TIMEOUT_SECONDS: f64 = 30.0;
+
 struct SchedulerService {
     pool: PgPool,
+    reassignment_timeout_seconds: f64,
 }
 
 #[tonic::async_trait]
@@ -142,7 +147,7 @@ impl Scheduler for SchedulerService {
             return Err(Status::invalid_argument("worker_id is empty"));
         }
 
-        let claimed = db::claim_task(&self.pool, &worker_id)
+        let claimed = db::claim_task(&self.pool, &worker_id, self.reassignment_timeout_seconds)
             .await
             .map_err(|e| Status::internal(format!("failed to claim task: {e}")))?;
 
@@ -239,10 +244,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = std::env::var("DATABASE_URL")?;
     let pool = db::connect(&database_url).await?;
 
-    let addr = "[::1]:50051".parse()?;
-    let service = SchedulerService { pool };
+    let reassignment_timeout_seconds = std::env::var("REASSIGNMENT_TIMEOUT_SECONDS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_REASSIGNMENT_TIMEOUT_SECONDS);
 
-    println!("scheduler: listening on {addr}");
+    let addr = "[::1]:50051".parse()?;
+    let service = SchedulerService { pool, reassignment_timeout_seconds };
+
+    println!(
+        "scheduler: listening on {addr} (reassignment timeout: {reassignment_timeout_seconds}s)"
+    );
 
     Server::builder()
         .add_service(SchedulerServer::new(service))

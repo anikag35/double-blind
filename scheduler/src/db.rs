@@ -80,10 +80,11 @@ pub struct ClaimedTask {
 }
 
 /// Atomically claims one task: a fresh `pending` task, or a `claimed` one
-/// whose worker went silent (no heartbeat in the last 30 seconds)
+/// whose worker went silent (no heartbeat within reassignment_timeout_seconds).
 pub async fn claim_task(
     pool: &PgPool,
     worker_id: &str,
+    reassignment_timeout_seconds: f64,
 ) -> Result<Option<ClaimedTask>, sqlx::Error> {
     sqlx::query_as::<_, ClaimedTask>(
         "WITH claimed AS ( \
@@ -92,7 +93,7 @@ pub async fn claim_task(
             WHERE task_id = ( \
                 SELECT task_id FROM tasks \
                 WHERE status = 'pending' \
-                   OR (status = 'claimed' AND last_heartbeat < now() - interval '30 seconds') \
+                   OR (status = 'claimed' AND last_heartbeat < now() - (interval '1 second' * $2)) \
                 ORDER BY created_at \
                 FOR UPDATE SKIP LOCKED \
                 LIMIT 1 \
@@ -105,6 +106,7 @@ pub async fn claim_task(
         JOIN runs ON runs.run_id = claimed.run_id",
     )
     .bind(worker_id)
+    .bind(reassignment_timeout_seconds)
     .fetch_optional(pool)
     .await
 }
