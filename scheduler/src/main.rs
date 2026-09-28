@@ -27,6 +27,8 @@ mod report_result_tests_validation;
 mod heartbeat_tests;
 #[cfg(test)]
 mod get_run_tests;
+#[cfg(test)]
+mod chaos_test_tier1;
 mod task_message;
 mod validate;
 mod pb {
