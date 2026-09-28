@@ -12,7 +12,7 @@ Core system is built and working end-to-end: scheduler, worker, and CLI all veri
 - [x] Worker (Python): claim/process/report loop, heartbeat sender, blind/unblind pairwise judging
 - [x] `blind` CLI (Rust): `blind run` and `blind show`, verified end-to-end
 - [x] Postgres-backed queue with automatic dead-worker reclaim
-- [ ] Chaos test (kill a worker mid-task, verify no lost/duplicated results) — in progress
+- [x] Chaos test: a real worker process is `SIGKILL`'d mid-task, verified no lost/duplicated results
 - [ ] Real model/judge clients (currently `FakeClient` only)
 - [ ] Pairwise mode's CLI output (win/loss/tie table)
 - [ ] Local multi-worker scale-out benchmark
