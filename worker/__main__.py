@@ -3,6 +3,7 @@ import os
 import grpc
 
 from worker import blind_pb2_grpc
+from worker.env_file import load_env_file
 from worker.fake_client import FakeClient
 from worker.identity import generate_worker_id
 from worker.run import heartbeat_interval_seconds, run_worker, scheduler_address
@@ -18,6 +19,7 @@ def build_client():
 
 
 def main() -> None:
+    load_env_file()
     address = scheduler_address()
     worker_id = generate_worker_id()
     heartbeat_seconds = heartbeat_interval_seconds()
