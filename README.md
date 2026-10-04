@@ -6,14 +6,14 @@ Judge scoring is blinded to both model identity and response position/order, to 
 
 ## Status
 
-Core system is built and working end-to-end: scheduler, worker, and CLI all verified together against a real Postgres database, using a deterministic `FakeClient` in place of real model APIs.
+Core system is built and verified end-to-end, including real model APIs: scheduler, worker, and CLI all tested together against a real Postgres database.
 
 - [x] Scheduler (Rust, gRPC): `SubmitRun`, `GetTask`, `ReportResult`, `Heartbeat`, `GetRun` — all implemented and tested
 - [x] Worker (Python): claim/process/report loop, heartbeat sender, blind/unblind pairwise judging
 - [x] `blind` CLI (Rust): `blind run` and `blind show`, verified end-to-end
 - [x] Postgres-backed queue with automatic dead-worker reclaim
 - [x] Chaos test: a real worker process is `SIGKILL`'d mid-task, verified no lost/duplicated results
-- [ ] Real model/judge clients (currently `FakeClient` only)
+- [x] Real model/judge clients: Anthropic + OpenAI, routed by model name prefix (`WORKER_CLIENT=real`; defaults to deterministic `FakeClient`). Verified with a real two-provider run, judged by a third real model.
 - [ ] Pairwise mode's CLI output (win/loss/tie table)
 - [ ] Local multi-worker scale-out benchmark
 
@@ -21,7 +21,7 @@ Core system is built and working end-to-end: scheduler, worker, and CLI all veri
 
 - **Scheduler** (Rust): expands a run request into individual tasks, validates that the judge isn't among the models being evaluated, computes content-addressed task IDs, and writes tasks to the Postgres-backed queue. Exposes the gRPC service that both the CLI and workers talk to. Also serves `GetRun`, computing the leaderboard as a plain SQL aggregate (mean score per model) directly against Postgres.
 - **Queue** (Postgres): a `tasks` table. A worker that misses its heartbeat has its task automatically reclaimed by the same claim query used for fresh work (reassignment timeout defaults to 30s, configurable via `REASSIGNMENT_TIMEOUT_SECONDS`).
-- **Workers** (Python): pull tasks over gRPC, call the contestant model and the judge model, score against the rubric, report results. Heartbeat interval defaults to 5s, configurable via `HEARTBEAT_INTERVAL_SECONDS`.
+- **Workers** (Python): pull tasks over gRPC, call the contestant model and the judge model, score against the rubric, report results. Heartbeat interval defaults to 5s, configurable via `HEARTBEAT_INTERVAL_SECONDS`. Model calls are dispatched by model name prefix (`claude-*` → Anthropic, `gpt-*` → OpenAI) to a real `Client` implementation when `WORKER_CLIENT=real`. Otherwise, a deterministic `FakeClient` is used, which is also what the chaos test runs against.
 - **Storage** (Postgres): task status for checkpointing, plus completed scores, verdicts, and per-criterion rationale.
 - **CLI** (`blind`, Rust): a gRPC client to the scheduler. `blind run` submits an eval and polls until it's done; `blind show <run_id>` prints a completed run's leaderboard.
 
@@ -29,6 +29,7 @@ Core system is built and working end-to-end: scheduler, worker, and CLI all veri
 
 ```
 cargo run --bin scheduler         # starts the gRPC server
-python -m worker                  # run in one or more terminals and each is a worker process
+python -m worker                  # FakeClient, no API keys needed - run in one or more terminals
+WORKER_CLIENT=real python -m worker   # uses real Anthropic/OpenAI clients - needs ANTHROPIC_API_KEY / OPENAI_API_KEY in .env
 blind run --prompts tasks.jsonl --judge gpt-5
 ```
