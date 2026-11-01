@@ -4,6 +4,28 @@ A distributed, fault-tolerant LLM evaluation platform. CLI command: `blind`.
 
 Judge scoring is blinded to both model identity and response position/order, to control for the position bias and self-preference bias that LLM-as-judge setups are known to suffer from.
 
+```mermaid
+graph LR
+    CLI["blind CLI (Rust)"]
+    Sched["Scheduler (Rust)"]
+    PG[("Postgres")]
+    W1["Worker 1 (Python)"]
+    WN["Worker N (Python)"]
+    Anthropic["Anthropic API"]
+    OpenAI["OpenAI API"]
+
+    CLI -- "SubmitRun, GetRun" --> Sched
+    Sched -- "SELECT ... FOR UPDATE SKIP LOCKED" --> PG
+    W1 -- "GetTask, Heartbeat, ReportResult" --> Sched
+    WN -- "GetTask, Heartbeat, ReportResult" --> Sched
+    W1 -.-> Anthropic
+    W1 -.-> OpenAI
+    WN -.-> Anthropic
+    WN -.-> OpenAI
+```
+
+One scheduler, a Postgres-backed queue, and any number of worker processes pulling from it independently — adding workers is just starting more processes, no coordination between them required.
+
 ## Status
 
 Core system is built and verified end-to-end, including real model APIs: scheduler, worker, and CLI all tested together against a real Postgres database.
