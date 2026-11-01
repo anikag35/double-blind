@@ -26,19 +26,6 @@ graph LR
 
 One scheduler, a Postgres-backed queue, and any number of worker processes pulling from it independently — adding workers is just starting more processes, no coordination between them required.
 
-## Status
-
-Core system is built and verified end-to-end, including real model APIs: scheduler, worker, and CLI all tested together against a real Postgres database.
-
-- [x] Scheduler (Rust, gRPC): `SubmitRun`, `GetTask`, `ReportResult`, `Heartbeat`, `GetRun` — all implemented and tested
-- [x] Worker (Python): claim/process/report loop, heartbeat sender, blind/unblind pairwise judging
-- [x] `blind` CLI (Rust): `blind run` and `blind show`, verified end-to-end
-- [x] Postgres-backed queue with automatic dead-worker reclaim
-- [x] Chaos test: a real worker process is `SIGKILL`'d mid-task, verified no lost/duplicated results
-- [x] Real model/judge clients: Anthropic + OpenAI, routed by model name prefix (`WORKER_CLIENT=real`; defaults to deterministic `FakeClient`). Verified with a real two-provider run, judged by a third real model.
-- [x] Pairwise mode's CLI output: win/loss/tie table per condition (blind/unblind) plus the raw win-rate shift — the actual bias-measurement demonstration. Verified end-to-end with real providers.
-- [x] Local multi-worker scale-out benchmark: a 24-task run went from ~54s with 1 worker to ~9.5s with 6 workers (5.5–5.7x speedup across repeated runs) — `scripts/scale_benchmark.py`
-
 ## Architecture
 
 - **Scheduler** (Rust): expands a run request into individual tasks, validates that the judge isn't among the models being evaluated, computes content-addressed task IDs, and writes tasks to the Postgres-backed queue. Exposes the gRPC service that both the CLI and workers talk to. Also serves `GetRun`, computing the leaderboard as a plain SQL aggregate (mean score per model) directly against Postgres.
@@ -47,11 +34,64 @@ Core system is built and verified end-to-end, including real model APIs: schedul
 - **Storage** (Postgres): task status for checkpointing, plus completed scores, verdicts, and per-criterion rationale.
 - **CLI** (`blind`, Rust): a gRPC client to the scheduler. `blind run` submits an eval and polls until it's done; `blind show <run_id>` prints a completed run's results — a ranked leaderboard for rubric mode, or a win/loss/tie table per condition (plus the raw blind-vs-unblind win-rate shift) for pairwise mode.
 
-## Local dev
+## Setup
+
+1. A Postgres database (e.g. a free [Supabase](https://supabase.com) project). Add the connection string to `.env`:
+   ```
+   DATABASE_URL=postgresql://...
+   ```
+2. Run the migrations in `db/migrations/` against it.
+3. Build both Rust binaries: `cargo build` (produces `scheduler` and `blind`).
+4. Optional, for real model calls instead of the deterministic `FakeClient`: add `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` to `.env`.
+
+## Usage
+
+Start the scheduler and at least one worker (each in its own terminal):
 
 ```
-cargo run --bin scheduler         # starts the gRPC server
-python -m worker                  # FakeClient, no API keys needed - run in one or more terminals
-WORKER_CLIENT=real python -m worker   # uses real Anthropic/OpenAI clients - needs ANTHROPIC_API_KEY / OPENAI_API_KEY in .env
-blind run --prompts tasks.jsonl --judge gpt-5
+cargo run --bin scheduler
+
+python -m worker                      # FakeClient - no API keys needed, deterministic
+WORKER_CLIENT=real python -m worker   # real Anthropic/OpenAI clients
 ```
+
+**Rubric mode** — score N models independently against a rubric, ranked by mean score:
+
+```
+$ cat models.yaml
+models:
+  - claude-opus-5
+  - gpt-5
+
+$ blind run --prompts tasks.jsonl --judge claude-sonnet-5
+
+Run ID: run_8f2e1a
+
+RUBRIC LEADERBOARD — run_8f2e1a
+────────────────────────────────
+ Rank  Model     Mean Score
+  1    claude-opus-5   4.31
+  2    gpt-5           3.94
+────────────────────────────────
+```
+
+**Pairwise mode** — head-to-head comparison, blinded by default; `--compare` adds an unblinded pass to measure whether the judge's verdict shifts once identity is revealed:
+
+```
+$ blind run --models pair.yaml --prompts tasks.jsonl --judge claude-sonnet-5 --mode pairwise --compare
+
+Run ID: run_9c4d02
+
+PAIRWISE RESULTS — run_9c4d02
+Pair: claude-opus-5 vs gpt-5
+
+              claude-opus-5 wins gpt-5 wins ties
+blinded       27                 19         4
+unblinded     34                 13         3
+
+Raw win rate for claude-opus-5: 54% blinded -> 68% unblinded (+14 pts when identity was revealed).
+
+NOTE: this is a descriptive observation, not a significance test.
+```
+
+View a completed run again later with `blind show <run_id>`.
