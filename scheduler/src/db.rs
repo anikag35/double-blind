@@ -190,26 +190,41 @@ pub async fn update_heartbeat(pool: &PgPool, task_id: &str, worker_id: &str) -> 
     Ok(result.rows_affected() == 1)
 }
 
-pub struct LeaderboardResult {
-    pub all_tasks_done: bool,
-    /// (model, mean composite_score), ordered highest first. Empty until all_tasks_done is true.
-    pub entries: Vec<(String, f64)>,
+pub struct PairwiseCountsRow {
+    pub model_a: String,
+    pub model_b: String,
+    /// (model_a_wins, model_b_wins, ties)
+    pub blind: (i64, i64, i64),
+    pub unblind: Option<(i64, i64, i64)>,
 }
 
-/// Returns None if run_id doesn't exist. Lazily flips runs.status to 'done' the first time every task for the run is found done. Entries only computed once done - reading rubric_results, so a pairwise-mode run's entries stay empty (pairwise leaderboard support isn't built yet).
+pub enum LeaderboardData {
+    /// (model, mean composite_score), ordered highest first.
+    Rubric(Vec<(String, f64)>),
+    Pairwise(PairwiseCountsRow),
+}
+
+pub struct LeaderboardResult {
+    pub all_tasks_done: bool,
+    /// Some only once all_tasks_done is true.
+    pub data: Option<LeaderboardData>,
+}
+
+/// Returns None if run_id doesn't exist. Lazily flips runs.status to 'done' the first time every task for the run is found done.
 pub async fn get_run_leaderboard(
     pool: &PgPool,
     run_id: &str,
 ) -> Result<Option<LeaderboardResult>, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
-    let run_exists: Option<String> = sqlx::query_scalar("SELECT run_id FROM runs WHERE run_id = $1")
-        .bind(run_id)
-        .fetch_optional(&mut *tx)
-        .await?;
-    if run_exists.is_none() {
+    let run: Option<(String, bool)> =
+        sqlx::query_as("SELECT mode, compare FROM runs WHERE run_id = $1")
+            .bind(run_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+    let Some((mode, compare)) = run else {
         return Ok(None);
-    }
+    };
 
     let not_done_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM tasks WHERE run_id = $1 AND status != 'done'")
@@ -225,8 +240,14 @@ pub async fn get_run_leaderboard(
             .await?;
     }
 
-    let entries: Vec<(String, f64)> = if all_tasks_done {
-        sqlx::query_as(
+    let data = if !all_tasks_done {
+        None
+    } else if mode == "pairwise" {
+        Some(LeaderboardData::Pairwise(
+            fetch_pairwise_counts(&mut tx, run_id, compare).await?,
+        ))
+    } else {
+        let entries: Vec<(String, f64)> = sqlx::query_as(
             "SELECT tasks.payload->>'model' AS model, AVG(rubric_results.composite_score) AS mean_score \
              FROM tasks JOIN rubric_results ON rubric_results.task_id = tasks.task_id \
              WHERE tasks.run_id = $1 \
@@ -235,12 +256,51 @@ pub async fn get_run_leaderboard(
         )
         .bind(run_id)
         .fetch_all(&mut *tx)
-        .await?
-    } else {
-        vec![]
+        .await?;
+        Some(LeaderboardData::Rubric(entries))
     };
 
     tx.commit().await?;
 
-    Ok(Some(LeaderboardResult { all_tasks_done, entries }))
+    Ok(Some(LeaderboardResult { all_tasks_done, data }))
+}
+
+async fn fetch_pairwise_counts(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    run_id: &str,
+    compare: bool,
+) -> Result<PairwiseCountsRow, sqlx::Error> {
+    let (model_a, model_b): (String, String) = sqlx::query_as(
+        "SELECT payload->>'model_a', payload->>'model_b' FROM tasks WHERE run_id = $1 LIMIT 1",
+    )
+    .bind(run_id)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    let rows: Vec<(String, i64, i64, i64)> = sqlx::query_as(
+        "SELECT tasks.payload->>'condition' AS condition, \
+                COUNT(*) FILTER (WHERE pairwise_results.verdict = 'model_a') AS model_a_wins, \
+                COUNT(*) FILTER (WHERE pairwise_results.verdict = 'model_b') AS model_b_wins, \
+                COUNT(*) FILTER (WHERE pairwise_results.verdict = 'tie') AS ties \
+         FROM tasks JOIN pairwise_results ON pairwise_results.task_id = tasks.task_id \
+         WHERE tasks.run_id = $1 \
+         GROUP BY tasks.payload->>'condition'",
+    )
+    .bind(run_id)
+    .fetch_all(&mut **tx)
+    .await?;
+
+    let find = |condition: &str| {
+        rows.iter()
+            .find(|(c, ..)| c == condition)
+            .map(|(_, a, b, t)| (*a, *b, *t))
+            .unwrap_or((0, 0, 0))
+    };
+
+    Ok(PairwiseCountsRow {
+        model_a,
+        model_b,
+        blind: find("blind"),
+        unblind: if compare { Some(find("unblind")) } else { None },
+    })
 }

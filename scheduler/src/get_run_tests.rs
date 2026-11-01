@@ -1,3 +1,4 @@
+use crate::pb::leaderboard::Result as LeaderboardOutcome;
 use crate::pb::task_result::Outcome;
 use crate::pb::{CriterionScore, Mode, RubricResult, RunId, RunRequest, TaskResult, WorkerId};
 use crate::submit_run_tests::{cleanup_run, spawn_client, test_pool, write_temp_file, TASK_QUEUE_TEST_LOCK};
@@ -34,7 +35,7 @@ async fn get_run_reports_not_done_until_every_task_is_done() {
         .expect("get_run should succeed")
         .into_inner();
     assert!(!leaderboard.all_tasks_done);
-    assert!(leaderboard.entries.is_empty());
+    assert!(leaderboard.result.is_none());
 
     // Claim and finish only one of the two tasks
     let task = client
@@ -112,13 +113,17 @@ async fn get_run_returns_ranked_leaderboard_once_all_tasks_done() {
         .into_inner();
 
     assert!(leaderboard.all_tasks_done);
-    assert_eq!(leaderboard.entries.len(), 2);
-    assert_eq!(leaderboard.entries[0].rank, 1);
-    assert_eq!(leaderboard.entries[0].model, "claude");
-    assert_eq!(leaderboard.entries[0].mean_score, 4.5);
-    assert_eq!(leaderboard.entries[1].rank, 2);
-    assert_eq!(leaderboard.entries[1].model, "gemini");
-    assert_eq!(leaderboard.entries[1].mean_score, 2.5);
+    let entries = match leaderboard.result {
+        Some(LeaderboardOutcome::Rubric(rubric)) => rubric.entries,
+        other => panic!("expected a rubric leaderboard, got {other:?}"),
+    };
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].rank, 1);
+    assert_eq!(entries[0].model, "claude");
+    assert_eq!(entries[0].mean_score, 4.5);
+    assert_eq!(entries[1].rank, 2);
+    assert_eq!(entries[1].model, "gemini");
+    assert_eq!(entries[1].mean_score, 2.5);
 
     let (status,): (String,) = sqlx::query_as("SELECT status FROM runs WHERE run_id = $1")
         .bind(&run_id)

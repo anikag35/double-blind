@@ -28,6 +28,8 @@ mod heartbeat_tests;
 #[cfg(test)]
 mod get_run_tests;
 #[cfg(test)]
+mod get_run_tests_pairwise;
+#[cfg(test)]
 mod chaos_test_tier1;
 mod task_message;
 mod validate;
@@ -39,8 +41,8 @@ use std::fs;
 
 use pb::scheduler_server::{Scheduler, SchedulerServer};
 use pb::{
-    Empty, HeartbeatRequest, Leaderboard, LeaderboardEntry, Mode, RunHandle, RunId, RunRequest,
-    Task, TaskResult, WorkerId,
+    leaderboard, Empty, HeartbeatRequest, Leaderboard, LeaderboardEntry, Mode, PairwiseConditionCounts,
+    PairwiseCounts, RubricLeaderboard, RunHandle, RunId, RunRequest, Task, TaskResult, WorkerId,
 };
 use sqlx::PgPool;
 use tonic::{transport::Server, Request, Response, Status};
@@ -220,22 +222,40 @@ impl Scheduler for SchedulerService {
             .map_err(|e| Status::internal(format!("failed to compute leaderboard: {e}")))?
             .ok_or_else(|| Status::not_found(format!("no such run: {run_id}")))?;
 
-        let entries = result
-            .entries
-            .into_iter()
-            .enumerate()
-            .map(|(i, (model, mean_score))| LeaderboardEntry {
-                rank: (i + 1) as i32,
-                model,
-                mean_score,
-            })
-            .collect();
+        let leaderboard_result = result.data.map(|data| match data {
+            db::LeaderboardData::Rubric(entries) => leaderboard::Result::Rubric(RubricLeaderboard {
+                entries: entries
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (model, mean_score))| LeaderboardEntry {
+                        rank: (i + 1) as i32,
+                        model,
+                        mean_score,
+                    })
+                    .collect(),
+            }),
+            db::LeaderboardData::Pairwise(counts) => leaderboard::Result::Pairwise(PairwiseCounts {
+                model_a: counts.model_a,
+                model_b: counts.model_b,
+                blind: Some(condition_counts(counts.blind)),
+                has_unblind: counts.unblind.is_some(),
+                unblind: counts.unblind.map(condition_counts),
+            }),
+        });
 
         Ok(Response::new(Leaderboard {
             run_id,
-            entries,
             all_tasks_done: result.all_tasks_done,
+            result: leaderboard_result,
         }))
+    }
+}
+
+fn condition_counts((model_a_wins, model_b_wins, ties): (i64, i64, i64)) -> PairwiseConditionCounts {
+    PairwiseConditionCounts {
+        model_a_wins: model_a_wins as i32,
+        model_b_wins: model_b_wins as i32,
+        ties: ties as i32,
     }
 }
 
