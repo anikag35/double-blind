@@ -14,7 +14,7 @@ Core system is built and verified end-to-end, including real model APIs: schedul
 - [x] Postgres-backed queue with automatic dead-worker reclaim
 - [x] Chaos test: a real worker process is `SIGKILL`'d mid-task, verified no lost/duplicated results
 - [x] Real model/judge clients: Anthropic + OpenAI, routed by model name prefix (`WORKER_CLIENT=real`; defaults to deterministic `FakeClient`). Verified with a real two-provider run, judged by a third real model.
-- [ ] Pairwise mode's CLI output (win/loss/tie table)
+- [x] Pairwise mode's CLI output: win/loss/tie table per condition (blind/unblind) plus the raw win-rate shift — the actual bias-measurement demonstration. Verified end-to-end with real providers.
 - [ ] Local multi-worker scale-out benchmark
 
 ## Architecture
@@ -23,7 +23,7 @@ Core system is built and verified end-to-end, including real model APIs: schedul
 - **Queue** (Postgres): a `tasks` table. A worker that misses its heartbeat has its task automatically reclaimed by the same claim query used for fresh work (reassignment timeout defaults to 30s, configurable via `REASSIGNMENT_TIMEOUT_SECONDS`).
 - **Workers** (Python): pull tasks over gRPC, call the contestant model and the judge model, score against the rubric, report results. Heartbeat interval defaults to 5s, configurable via `HEARTBEAT_INTERVAL_SECONDS`. Model calls are dispatched by model name prefix (`claude-*` → Anthropic, `gpt-*` → OpenAI) to a real `Client` implementation when `WORKER_CLIENT=real`. Otherwise, a deterministic `FakeClient` is used, which is also what the chaos test runs against.
 - **Storage** (Postgres): task status for checkpointing, plus completed scores, verdicts, and per-criterion rationale.
-- **CLI** (`blind`, Rust): a gRPC client to the scheduler. `blind run` submits an eval and polls until it's done; `blind show <run_id>` prints a completed run's leaderboard.
+- **CLI** (`blind`, Rust): a gRPC client to the scheduler. `blind run` submits an eval and polls until it's done; `blind show <run_id>` prints a completed run's results — a ranked leaderboard for rubric mode, or a win/loss/tie table per condition (plus the raw blind-vs-unblind win-rate shift) for pairwise mode.
 
 ## Local dev
 
