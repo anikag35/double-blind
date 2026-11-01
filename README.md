@@ -15,7 +15,7 @@ Core system is built and verified end-to-end, including real model APIs: schedul
 - [x] Chaos test: a real worker process is `SIGKILL`'d mid-task, verified no lost/duplicated results
 - [x] Real model/judge clients: Anthropic + OpenAI, routed by model name prefix (`WORKER_CLIENT=real`; defaults to deterministic `FakeClient`). Verified with a real two-provider run, judged by a third real model.
 - [x] Pairwise mode's CLI output: win/loss/tie table per condition (blind/unblind) plus the raw win-rate shift — the actual bias-measurement demonstration. Verified end-to-end with real providers.
-- [ ] Local multi-worker scale-out benchmark
+- [x] Local multi-worker scale-out benchmark: a 24-task run went from ~54s with 1 worker to ~9.5s with 6 workers (5.5–5.7x speedup across repeated runs) — `scripts/scale_benchmark.py`
 
 ## Architecture
 
