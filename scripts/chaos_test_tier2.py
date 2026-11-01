@@ -72,6 +72,7 @@ def main() -> None:
     log(f"process logs will be written under {log_dir}")
 
     procs: dict[str, subprocess.Popen] = {}
+    run_id = None
     try:
         log(f"starting scheduler (reassignment timeout: {REASSIGNMENT_TIMEOUT_SECONDS}s)...")
         scheduler_env = {**os.environ, "REASSIGNMENT_TIMEOUT_SECONDS": str(REASSIGNMENT_TIMEOUT_SECONDS)}
@@ -155,10 +156,6 @@ def main() -> None:
 
         log("PASS: unclean worker death did not lose or duplicate the result")
 
-        psql(f"DELETE FROM rubric_results WHERE task_id = '{task_id}'")
-        psql(f"DELETE FROM tasks WHERE run_id = '{run_id}'")
-        psql(f"DELETE FROM runs WHERE run_id = '{run_id}'")
-
     finally:
         log("cleaning up processes...")
         for name, proc in procs.items():
@@ -169,6 +166,14 @@ def main() -> None:
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 proc.kill()
+
+        # Runs in finally so a failed/partial attempt (e.g. no worker claimed
+        # in time) doesn't leave orphaned rows in the shared dev database.
+        if run_id:
+            log("cleaning up database rows...")
+            psql(f"DELETE FROM rubric_results WHERE task_id IN (SELECT task_id FROM tasks WHERE run_id = '{run_id}')")
+            psql(f"DELETE FROM tasks WHERE run_id = '{run_id}'")
+            psql(f"DELETE FROM runs WHERE run_id = '{run_id}'")
 
 
 if __name__ == "__main__":
