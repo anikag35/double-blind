@@ -95,3 +95,9 @@ NOTE: this is a descriptive observation, not a significance test.
 ```
 
 View a completed run again later with `blind show <run_id>`.
+
+## Chaos test
+
+A real worker process gets `SIGKILL`'d mid-task — no graceful shutdown, no chance to flush anything — and a second worker reclaims and completes it with exactly one result row. Recorded at the real 30-second reassignment timeout (`scripts/chaos_test_tier2.py`):
+
+![Chaos test: a worker is killed mid-task and a second worker reclaims it](docs/chaos_test_demo.gif)
