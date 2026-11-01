@@ -158,12 +158,44 @@ class LeaderboardEntry(_message.Message):
     mean_score: float
     def __init__(self, rank: _Optional[int] = ..., model: _Optional[str] = ..., mean_score: _Optional[float] = ...) -> None: ...
 
-class Leaderboard(_message.Message):
-    __slots__ = ("run_id", "entries", "all_tasks_done")
-    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+class RubricLeaderboard(_message.Message):
+    __slots__ = ("entries",)
     ENTRIES_FIELD_NUMBER: _ClassVar[int]
-    ALL_TASKS_DONE_FIELD_NUMBER: _ClassVar[int]
-    run_id: str
     entries: _containers.RepeatedCompositeFieldContainer[LeaderboardEntry]
+    def __init__(self, entries: _Optional[_Iterable[_Union[LeaderboardEntry, _Mapping]]] = ...) -> None: ...
+
+class PairwiseConditionCounts(_message.Message):
+    __slots__ = ("model_a_wins", "model_b_wins", "ties")
+    MODEL_A_WINS_FIELD_NUMBER: _ClassVar[int]
+    MODEL_B_WINS_FIELD_NUMBER: _ClassVar[int]
+    TIES_FIELD_NUMBER: _ClassVar[int]
+    model_a_wins: int
+    model_b_wins: int
+    ties: int
+    def __init__(self, model_a_wins: _Optional[int] = ..., model_b_wins: _Optional[int] = ..., ties: _Optional[int] = ...) -> None: ...
+
+class PairwiseCounts(_message.Message):
+    __slots__ = ("model_a", "model_b", "blind", "has_unblind", "unblind")
+    MODEL_A_FIELD_NUMBER: _ClassVar[int]
+    MODEL_B_FIELD_NUMBER: _ClassVar[int]
+    BLIND_FIELD_NUMBER: _ClassVar[int]
+    HAS_UNBLIND_FIELD_NUMBER: _ClassVar[int]
+    UNBLIND_FIELD_NUMBER: _ClassVar[int]
+    model_a: str
+    model_b: str
+    blind: PairwiseConditionCounts
+    has_unblind: bool
+    unblind: PairwiseConditionCounts
+    def __init__(self, model_a: _Optional[str] = ..., model_b: _Optional[str] = ..., blind: _Optional[_Union[PairwiseConditionCounts, _Mapping]] = ..., has_unblind: _Optional[bool] = ..., unblind: _Optional[_Union[PairwiseConditionCounts, _Mapping]] = ...) -> None: ...
+
+class Leaderboard(_message.Message):
+    __slots__ = ("run_id", "all_tasks_done", "rubric", "pairwise")
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    ALL_TASKS_DONE_FIELD_NUMBER: _ClassVar[int]
+    RUBRIC_FIELD_NUMBER: _ClassVar[int]
+    PAIRWISE_FIELD_NUMBER: _ClassVar[int]
+    run_id: str
     all_tasks_done: bool
-    def __init__(self, run_id: _Optional[str] = ..., entries: _Optional[_Iterable[_Union[LeaderboardEntry, _Mapping]]] = ..., all_tasks_done: _Optional[bool] = ...) -> None: ...
+    rubric: RubricLeaderboard
+    pairwise: PairwiseCounts
+    def __init__(self, run_id: _Optional[str] = ..., all_tasks_done: _Optional[bool] = ..., rubric: _Optional[_Union[RubricLeaderboard, _Mapping]] = ..., pairwise: _Optional[_Union[PairwiseCounts, _Mapping]] = ...) -> None: ...

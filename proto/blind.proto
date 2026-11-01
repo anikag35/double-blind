@@ -112,11 +112,32 @@ message LeaderboardEntry {
   double mean_score = 3;
 }
 
+message RubricLeaderboard {
+  repeated LeaderboardEntry entries = 1;
+}
+
+message PairwiseConditionCounts {
+  int32 model_a_wins = 1;
+  int32 model_b_wins = 2;
+  int32 ties = 3;
+}
+
+message PairwiseCounts {
+  string model_a = 1;
+  string model_b = 2;
+  PairwiseConditionCounts blind = 3;
+  bool has_unblind = 4; // false when the run didn't use --compare
+  PairwiseConditionCounts unblind = 5;
+}
+
 message Leaderboard {
   string run_id = 1;
-  repeated LeaderboardEntry entries = 2;
   // False while any task is still pending/claimed for this run.
-  bool all_tasks_done = 3;
+  bool all_tasks_done = 2;
+  oneof result {
+    RubricLeaderboard rubric = 3;
+    PairwiseCounts pairwise = 4;
+  }
 }
 
 // ---- Service ----
