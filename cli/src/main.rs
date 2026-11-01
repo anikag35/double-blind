@@ -111,13 +111,69 @@ async fn run_command(args: RunArgs) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn print_leaderboard(run_id: &str, leaderboard: &pb::Leaderboard) {
+    match &leaderboard.result {
+        Some(pb::leaderboard::Result::Rubric(rubric)) => print_rubric_leaderboard(run_id, rubric),
+        Some(pb::leaderboard::Result::Pairwise(counts)) => print_pairwise_counts(run_id, counts),
+        None => println!("Run {run_id} has no results to show."),
+    }
+}
+
+fn print_rubric_leaderboard(run_id: &str, rubric: &pb::RubricLeaderboard) {
     println!("\nRUBRIC LEADERBOARD — {run_id}");
     println!("────────────────────────────────");
     println!(" Rank  Model     Mean Score");
-    for entry in &leaderboard.entries {
+    for entry in &rubric.entries {
         println!("  {:<4} {:<9} {:.2}", entry.rank, entry.model, entry.mean_score);
     }
     println!("────────────────────────────────");
+}
+
+fn print_pairwise_counts(run_id: &str, counts: &pb::PairwiseCounts) {
+    println!("\nPAIRWISE RESULTS — {run_id}");
+    println!("Pair: {} vs {}", counts.model_a, counts.model_b);
+    println!();
+
+    // Column widths follow the model names' actual lengths, not a fixed
+    // guess - a short "claude"/"gemini" pair and a long "claude-haiku-4-5"
+    // pair both need to render with the numbers aligned under their header.
+    let a_header = format!("{} wins", counts.model_a);
+    let b_header = format!("{} wins", counts.model_b);
+    let col_a = a_header.len();
+    let col_b = b_header.len();
+
+    println!("{:12}{a_header:<col_a$} {b_header:<col_b$} ties", "");
+
+    let Some(blind) = &counts.blind else {
+        println!("  (no results yet)");
+        return;
+    };
+    let (aw, bw, t) = (blind.model_a_wins, blind.model_b_wins, blind.ties);
+    println!("{:12}{aw:<col_a$} {bw:<col_b$} {t}", "blinded");
+
+    if !counts.has_unblind {
+        return;
+    }
+    let Some(unblind) = &counts.unblind else { return };
+    let (aw, bw, t) = (unblind.model_a_wins, unblind.model_b_wins, unblind.ties);
+    println!("{:12}{aw:<col_a$} {bw:<col_b$} {t}", "unblinded");
+
+    let blind_total = blind.model_a_wins + blind.model_b_wins + blind.ties;
+    let unblind_total = unblind.model_a_wins + unblind.model_b_wins + unblind.ties;
+    if blind_total == 0 || unblind_total == 0 {
+        return;
+    }
+    let blind_rate = 100.0 * blind.model_a_wins as f64 / blind_total as f64;
+    let unblind_rate = 100.0 * unblind.model_a_wins as f64 / unblind_total as f64;
+    println!();
+    println!(
+        "Raw win rate for {}: {:.0}% blinded -> {:.0}% unblinded ({:+.0} pts when identity was revealed).",
+        counts.model_a,
+        blind_rate,
+        unblind_rate,
+        unblind_rate - blind_rate
+    );
+    println!();
+    println!("NOTE: this is a descriptive observation, not a significance test.");
 }
 
 async fn show_command(args: ShowArgs) -> Result<(), Box<dyn std::error::Error>> {
