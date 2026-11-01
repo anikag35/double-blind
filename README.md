@@ -34,6 +34,18 @@ One scheduler, a Postgres-backed queue, and any number of worker processes pulli
 - **Storage** (Postgres): task status for checkpointing, plus completed scores, verdicts, and per-criterion rationale.
 - **CLI** (`blind`, Rust): a gRPC client to the scheduler. `blind run` submits an eval and polls until it's done; `blind show <run_id>` prints a completed run's results — a ranked leaderboard for rubric mode, or a win/loss/tie table per condition (plus the raw blind-vs-unblind win-rate shift) for pairwise mode.
 
+## Project structure
+
+```
+scheduler/   Rust gRPC server - SubmitRun, GetTask, ReportResult, Heartbeat, GetRun
+worker/      Python worker - claim/process/report loop, model/judge clients
+cli/         Rust blind binary - a gRPC client to the scheduler
+proto/       blind.proto - the gRPC contract shared by all three
+db/          Postgres migrations
+scripts/     chaos_test_tier2.py, scale_benchmark.py (see below)
+docs/        assets referenced from this README
+```
+
 ## Setup
 
 1. A Postgres database (e.g. a free [Supabase](https://supabase.com) project). Add the connection string to `.env`:
@@ -101,3 +113,15 @@ View a completed run again later with `blind show <run_id>`.
 A real worker process gets `SIGKILL`'d mid-task — no graceful shutdown, no chance to flush anything — and a second worker reclaims and completes it with exactly one result row. Recorded at the real 30-second reassignment timeout (`scripts/chaos_test_tier2.py`):
 
 ![Chaos test: a worker is killed mid-task and a second worker reclaims it](docs/chaos_test_demo.gif)
+
+## Testing & benchmarks
+
+```
+cd scheduler && cargo test     # 67 tests, against a real Postgres database
+pytest worker/tests/           # 49 tests
+
+python scripts/chaos_test_tier2.py    # the real kill -9 shown above, runnable on demand
+python scripts/scale_benchmark.py     # 1 vs N workers, measures the speedup for yourself
+```
+
+A faster, CI-safe version of the chaos test also runs as part of `cargo test`: it writes a stale-heartbeat task row directly and asserts `GetTask`'s claim query reclaims it, without spawning real processes or waiting out the reassignment window.
