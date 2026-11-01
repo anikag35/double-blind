@@ -1,4 +1,5 @@
 import hashlib
+import time
 
 from worker.client import CriterionResult, PairwiseVerdict
 from worker.rubric import Rubric
@@ -45,3 +46,30 @@ class FakeClient:
         pick = _stable_score(seed, 0, 2)  # 0 -> first, 1 -> second, 2 -> tie
         winner = ("first", "second", "tie")[pick]
         return PairwiseVerdict(winner=winner, rationale=f"[fake pairwise rationale: {winner}]")
+
+
+class DelayedFakeClient(FakeClient):
+    """Same deterministic behavior as FakeClient, but sleeps delay_seconds before each call - simulates realistic API latency for benchmarking the scheduler/queue's horizontal scalability without real network cost or variance."""
+
+    def __init__(self, delay_seconds: float):
+        self.delay_seconds = delay_seconds
+
+    def generate(self, model: str, prompt: str) -> str:
+        time.sleep(self.delay_seconds)
+        return super().generate(model, prompt)
+
+    def judge_rubric(self, model: str, prompt: str, response: str, rubric: Rubric) -> dict[str, CriterionResult]:
+        time.sleep(self.delay_seconds)
+        return super().judge_rubric(model, prompt, response, rubric)
+
+    def judge_pairwise(
+        self,
+        model: str,
+        prompt: str,
+        response_first: str,
+        response_second: str,
+        identity_first: str | None = None,
+        identity_second: str | None = None,
+    ) -> PairwiseVerdict:
+        time.sleep(self.delay_seconds)
+        return super().judge_pairwise(model, prompt, response_first, response_second, identity_first, identity_second)

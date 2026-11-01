@@ -1,4 +1,6 @@
-from worker.fake_client import FakeClient
+import time
+
+from worker.fake_client import DelayedFakeClient, FakeClient
 from worker.rubric import Criterion, Rubric
 
 
@@ -70,3 +72,22 @@ def test_identity_participates_in_the_pairwise_verdict():
         if blind.winner != unblind.winner:
             any_diverged = True
     assert any_diverged
+
+
+def test_delayed_fake_client_sleeps_before_generate():
+    client = DelayedFakeClient(delay_seconds=0.05)
+    start = time.monotonic()
+    client.generate("claude", "prompt")
+    assert time.monotonic() - start >= 0.05
+
+
+def test_delayed_fake_client_is_still_deterministic():
+    client = DelayedFakeClient(delay_seconds=0.01)
+    assert client.generate("claude", "p") == client.generate("claude", "p")
+
+
+def test_delayed_fake_client_sleeps_before_judge_rubric():
+    client = DelayedFakeClient(delay_seconds=0.05)
+    start = time.monotonic()
+    client.judge_rubric("gpt-5", "p", "r", Rubric(scale="1-5", criteria=[Criterion(name="x", description="y", weight=1.0)]))
+    assert time.monotonic() - start >= 0.05
